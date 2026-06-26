@@ -149,7 +149,7 @@ bunx wrangler r2 bucket create edgeever-resources
 
 把 D1 创建命令返回的 `database_id` 填入本机 `.env.local` 的 `EDGE_EVER_D1_DATABASE_ID`。部署脚本会在运行时生成临时 `.wrangler.generated.toml`，不需要把个人 D1 ID 提交到公开仓库。
 
-生成登录密码 hash，并填入 `.env.local` 或 Cloudflare Build Variables：
+生成登录密码 hash，并填入 `.env.local` 或部署环境的 secret：
 
 ```sh
 bun run auth:hash -- <你的密码>
@@ -161,15 +161,7 @@ EDGE_EVER_AUTH_PASSWORD_HASH=<上一步生成的 hash>
 EDGE_EVER_SESSION_TTL_DAYS=30
 ```
 
-线上部署时，`EDGE_EVER_AUTH_PASSWORD_HASH` 应作为 Cloudflare Worker Secret 配置；`EDGE_EVER_AUTH_USERNAME` 和 `EDGE_EVER_SESSION_TTL_DAYS` 可以作为普通 Build Variables/vars。未配置 `EDGE_EVER_AUTH_PASSWORD_HASH` 且 D1 中没有用户时，EdgeEver 会保持无登录保护，避免一键部署后因为缺少密码变量而锁死实例。一旦配置密码 hash，首次成功登录会在 D1 中创建用户，之后浏览器通过 HttpOnly cookie session 访问 REST API。
-
-如果你把 Worker 连接到 GitHub 并开启 Cloudflare 自动构建，需要在 Cloudflare 的 Build Variables 里设置：
-
-```text
-EDGE_EVER_D1_DATABASE_ID=<你的 D1 database_id>
-EDGE_EVER_AUTH_USERNAME=admin
-EDGE_EVER_AUTH_PASSWORD_HASH=<你的密码 hash，建议作为 Worker Secret>
-```
+线上部署时，`EDGE_EVER_AUTH_PASSWORD_HASH` 应作为 Cloudflare Worker Secret 或 GitHub Actions Secret 配置。未配置 `EDGE_EVER_AUTH_PASSWORD_HASH` 且 D1 中没有用户时，EdgeEver 会保持无登录保护，避免一键部署后因为缺少密码变量而锁死实例。一旦配置密码 hash，首次成功登录会在 D1 中创建用户，之后浏览器通过 HttpOnly cookie session 访问 REST API。
 
 ## 多实例部署
 
@@ -211,19 +203,45 @@ bun run deploy:demo
 bun run deploy:all
 ```
 
-如果用 Cloudflare Git 自动构建，每个 Worker 都可以连接同一个 GitHub 仓库，但需要分别配置自己的 Build Variables。至少要设置：
+## GitHub Actions 自动部署
+
+仓库内置 `.github/workflows/deploy.yml`。Push 到 `main` 后会自动：
+
+1. 安装 Bun 依赖。
+2. 执行 `bun run typecheck`。
+3. 部署 `tianma` 实例。
+4. 同步 `tianma` 的 Worker Secret。
+5. 部署 `demo` 实例。
+6. 同步 `demo` 的 Worker Secret。
+
+需要在 GitHub 仓库 Secrets 中配置：
 
 ```text
-EDGE_EVER_WORKER_NAME=<实例 Worker 名>
-EDGE_EVER_CUSTOM_DOMAIN=<实例域名，或改用 EDGE_EVER_ROUTE_PATTERN>
-EDGE_EVER_ROUTE_PATTERN=<实例 route，例如 demo.edgeever.org/*>
-EDGE_EVER_D1_DATABASE_ID=<实例 D1 database_id>
-EDGE_EVER_R2_BUCKET_NAME=<实例 R2 bucket>
-EDGE_EVER_R2_PREVIEW_BUCKET_NAME=<实例 R2 preview bucket>
-EDGE_EVER_AUTH_USERNAME=admin
-EDGE_EVER_AUTH_PASSWORD_HASH=<实例密码 hash，建议作为 Worker Secret>
-EDGE_EVER_SESSION_TTL_DAYS=30
+CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
+
+EDGE_EVER_TIANMA_WORKER_NAME
+EDGE_EVER_TIANMA_CUSTOM_DOMAIN
+EDGE_EVER_TIANMA_D1_DATABASE_NAME
+EDGE_EVER_TIANMA_D1_DATABASE_ID
+EDGE_EVER_TIANMA_R2_BUCKET_NAME
+EDGE_EVER_TIANMA_R2_PREVIEW_BUCKET_NAME
+EDGE_EVER_TIANMA_AUTH_USERNAME
+EDGE_EVER_TIANMA_AUTH_PASSWORD_HASH
+EDGE_EVER_TIANMA_SESSION_TTL_DAYS
+
+EDGE_EVER_DEMO_WORKER_NAME
+EDGE_EVER_DEMO_ROUTE_PATTERN
+EDGE_EVER_DEMO_D1_DATABASE_NAME
+EDGE_EVER_DEMO_D1_DATABASE_ID
+EDGE_EVER_DEMO_R2_BUCKET_NAME
+EDGE_EVER_DEMO_R2_PREVIEW_BUCKET_NAME
+EDGE_EVER_DEMO_AUTH_USERNAME
+EDGE_EVER_DEMO_AUTH_PASSWORD_HASH
+EDGE_EVER_DEMO_SESSION_TTL_DAYS
 ```
+
+Cloudflare 原生 Workers Builds 也可以做 Git 集成；如果账号已启用 Workers Previews/Builds，可以把同样的 deploy command 配成 `bun run deploy:tianma` 和 `bun run deploy:demo`。当前仓库默认使用 GitHub Actions，因为它对普通公开仓库更直接。
 
 应用本地迁移：
 
