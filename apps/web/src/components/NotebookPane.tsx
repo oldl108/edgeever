@@ -377,13 +377,7 @@ export const NotebookPane = ({
       </div>
 
       <footer className="border-t border-slate-200 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 bg-white/70 backdrop-blur-sm">
-        <SyncStatusBar
-          summary={syncSummary}
-          isOnline={isOnline}
-          isSyncing={isSyncingQueuedChanges}
-          onSyncNow={onSyncQueuedChanges}
-        />
-        <div className="mt-3">
+        <div>
           <button
             onClick={onOpenSettings}
             className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-white p-2 text-left hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
