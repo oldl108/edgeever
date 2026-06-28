@@ -80,7 +80,7 @@ interface ProfileCardProps {
 }
 
 const ProfileCard = ({ user }: ProfileCardProps) => (
-  <Card className="self-start overflow-hidden border-emerald-100 bg-gradient-to-br from-white to-emerald-50/40 shadow-none">
+  <Card className="w-full min-w-0 self-start overflow-hidden border-emerald-100 bg-gradient-to-br from-white to-emerald-50/40 shadow-none">
     <CardContent className="flex items-center gap-3 p-4">
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-base font-bold uppercase text-white shadow-sm shadow-emerald-200">
         {user?.username?.charAt(0) ?? "U"}
@@ -102,7 +102,7 @@ interface PreferenceCardProps {
 }
 
 const PreferenceCard = ({ imageCompressionEnabled, onImageCompressionChange }: PreferenceCardProps) => (
-  <Card className="shadow-none">
+  <Card className="w-full min-w-0 overflow-hidden shadow-none">
     <CardHeader className="p-4">
       <CardTitle className="flex items-center gap-2 text-sm">
         <Image className="h-4 w-4 text-emerald-700" />
@@ -110,12 +110,12 @@ const PreferenceCard = ({ imageCompressionEnabled, onImageCompressionChange }: P
       </CardTitle>
     </CardHeader>
     <CardContent className="p-4 pt-0">
-      <div className="flex min-h-14 items-center justify-between gap-4 rounded-lg border border-slate-100 bg-slate-50/70 px-4 py-3">
+      <div className="flex min-h-14 flex-col items-start gap-3 rounded-lg border border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-slate-900">压缩笔记内图片</div>
           <div className="mt-0.5 text-xs leading-4 text-slate-500">上传大图时在本地压缩，节省资源占用。</div>
         </div>
-        <div className="flex w-32 shrink-0 justify-start">
+        <div className="flex w-full shrink-0 justify-start sm:w-32">
           <Switch
             checked={imageCompressionEnabled}
             onCheckedChange={onImageCompressionChange}
@@ -150,15 +150,13 @@ const CreatedTokenNotice = ({ token }: CreatedTokenNoticeProps) => {
         API Token 已成功生成
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Input
-          className="h-8 min-w-0 flex-1 border-emerald-200 font-mono text-xs focus-visible:ring-emerald-500/20"
-          readOnly
-          value={token}
-        />
+        <div className="flex h-8 min-w-0 flex-1 items-center rounded-md border border-emerald-200 bg-white px-3 font-mono text-xs text-slate-900">
+          <span className="min-w-0 truncate">{token}</span>
+        </div>
         <Button
           size="sm"
           variant="solid"
-          className="whitespace-nowrap bg-emerald-600 text-white hover:bg-emerald-700"
+          className="w-full whitespace-nowrap bg-emerald-600 text-white hover:bg-emerald-700 sm:w-auto"
           type="button"
           onClick={() => void handleCopy()}
         >
@@ -199,12 +197,12 @@ const McpRemoteServerField = () => {
           className="flex min-h-9 min-w-0 flex-1 items-center rounded-md border border-slate-100 bg-white/70 px-3 font-mono text-xs text-slate-800"
           title={mcpRemoteServerUrl}
         >
-          <span className="truncate">{mcpRemoteServerUrl}</span>
+          <span className="min-w-0 truncate">{mcpRemoteServerUrl}</span>
         </div>
         <Button
           size="md"
           variant="outline"
-          className="h-9 w-32 whitespace-nowrap bg-white"
+          className="h-9 w-full whitespace-nowrap bg-white sm:w-32"
           type="button"
           onClick={() => void handleCopy()}
         >
@@ -349,7 +347,7 @@ const TokenCard = ({
   onToggleScope,
   onRevokeToken,
 }: TokenCardProps) => (
-  <Card className="shadow-none">
+  <Card className="w-full min-w-0 overflow-hidden shadow-none">
     <CardHeader className="p-4">
       <CardTitle className="flex items-center gap-2 text-sm">
         <KeyRound className="h-4 w-4 text-emerald-700" />
@@ -361,7 +359,7 @@ const TokenCard = ({
       <McpRemoteServerField />
       {createdToken && <CreatedTokenNotice token={createdToken} />}
 
-      <form className="space-y-4 rounded-lg border border-slate-100 bg-slate-50/70 p-3" onSubmit={onSubmit}>
+      <form className="min-w-0 space-y-4 rounded-lg border border-slate-100 bg-slate-50/70 p-3" onSubmit={onSubmit}>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Input
             className="h-9 min-w-0 flex-1 text-xs focus-visible:ring-4 focus-visible:ring-emerald-500/10"
@@ -372,7 +370,7 @@ const TokenCard = ({
           <Button
             size="md"
             variant="solid"
-            className="h-9 w-32 whitespace-nowrap bg-emerald-500 text-white hover:bg-emerald-600"
+            className="h-9 w-full whitespace-nowrap bg-emerald-500 text-white hover:bg-emerald-600 sm:w-32"
             type="submit"
             disabled={isCreating}
           >
@@ -413,7 +411,7 @@ const SessionCard = ({ authRequired, isLoggingOut, onLogout }: SessionCardProps)
   }
 
   return (
-    <Card className="border-rose-100 bg-rose-50/30 shadow-none">
+    <Card className="w-full min-w-0 overflow-hidden border-rose-100 bg-rose-50/30 shadow-none">
       <CardContent className="pt-6">
         <Button
           size="md"
@@ -504,7 +502,7 @@ export const SettingsPane = ({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-slate-50">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-x-hidden bg-slate-50">
       <header className="flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-end justify-between border-b border-slate-200 bg-white px-4 pb-3 pt-[env(safe-area-inset-top)] lg:h-16 lg:items-center lg:px-6 lg:pb-0 lg:pt-0">
         <div className="flex min-w-0 items-center gap-3">
           <Button
@@ -527,8 +525,8 @@ export const SettingsPane = ({
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 lg:px-6 lg:py-6">
-        <div className="mx-auto grid max-w-4xl gap-4">
+      <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-4 lg:px-6 lg:py-6">
+        <div className="mx-auto grid w-full min-w-0 max-w-4xl gap-4">
           <ProfileCard user={user} />
           <PreferenceCard
             imageCompressionEnabled={imageCompressionEnabled}
