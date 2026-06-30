@@ -456,7 +456,8 @@ export const WorkspaceApp = ({
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
-  const [activePane, setActivePane] = useState<Pane>("memos");
+  const isInitialSettingsRoute = location.pathname === SETTINGS_PATH;
+  const [activePane, setActivePane] = useState<Pane>(() => (isInitialSettingsRoute ? "editor" : "memos"));
   const [memoView, setMemoView] = useState<MemoView>("notebook");
   const [selectedNotebookId, setSelectedNotebookId] = useState<string | null>(null);
   const [selectedMemoId, setSelectedMemoId] = useState<string | null>(null);
@@ -470,11 +471,15 @@ export const WorkspaceApp = ({
   const [appNoticeDialog, setAppNoticeDialog] = useState<AppNoticeDialogState | null>(null);
   const [multiSelectKeyDown, setMultiSelectKeyDown] = useState(false);
   const [imageCompressionEnabled, setImageCompressionEnabled] = useState(readImageCompressionPreference);
-  const [rightView, setRightView] = useState<"editor" | "settings" | "assets">("editor");
+  const [rightView, setRightView] = useState<"editor" | "settings" | "assets">(() =>
+    isInitialSettingsRoute ? "settings" : "editor"
+  );
   const [tagsOpen, setTagsOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [mobileNotebookPickerOpen, setMobileNotebookPickerOpen] = useState(false);
-  const [mobileBottomNavActive, setMobileBottomNavActive] = useState<MobileBottomNavItem>("home");
+  const [mobileBottomNavActive, setMobileBottomNavActive] = useState<MobileBottomNavItem>(() =>
+    isInitialSettingsRoute ? "settings" : "home"
+  );
   const [mobileSearchFocusToken, setMobileSearchFocusToken] = useState(0);
   const [noteSearchFocusToken, setNoteSearchFocusToken] = useState(0);
   const [noteReplaceFocusToken, setNoteReplaceFocusToken] = useState(0);
