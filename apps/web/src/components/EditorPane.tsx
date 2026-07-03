@@ -361,6 +361,8 @@ const MobileNotebookSelectSheet = ({
 export const EditorPane = ({
   memo,
   mobileDefaultEditMemoId,
+  preserveUnsavedContentFromMemoId,
+  saveBlocked = false,
   isTrashView,
   notebooks,
   isLoading,
@@ -381,6 +383,8 @@ export const EditorPane = ({
 }: {
   memo: MemoDetail | null;
   mobileDefaultEditMemoId: string | null;
+  preserveUnsavedContentFromMemoId?: string | null;
+  saveBlocked?: boolean;
   isTrashView: boolean;
   notebooks: Notebook[];
   isLoading: boolean;
@@ -492,7 +496,7 @@ export const EditorPane = ({
     const currentMemo = memoRef.current;
     const currentEditor = editorRef.current;
 
-    if (!currentMemo || currentMemo.isDeleted || !currentEditor || !currentEditor.isEditable || files.length === 0) {
+    if (saveBlocked || !currentMemo || currentMemo.isDeleted || !currentEditor || !currentEditor.isEditable || files.length === 0) {
       return;
     }
 
@@ -535,13 +539,13 @@ export const EditorPane = ({
         window.setTimeout(() => setImageUploadState("idle"), 2200);
       }
     })();
-  }, [queryClient, t]);
+  }, [queryClient, saveBlocked, t]);
 
   const insertResourceFiles = useCallback((files: File[]) => {
     const currentMemo = memoRef.current;
     const currentEditor = editorRef.current;
 
-    if (!currentMemo || currentMemo.isDeleted || !currentEditor || !currentEditor.isEditable || files.length === 0) {
+    if (saveBlocked || !currentMemo || currentMemo.isDeleted || !currentEditor || !currentEditor.isEditable || files.length === 0) {
       return;
     }
 
@@ -596,7 +600,7 @@ export const EditorPane = ({
         window.setTimeout(() => setImageUploadState("idle"), 2200);
       }
     })();
-  }, [queryClient]);
+  }, [queryClient, saveBlocked, t]);
 
   const editor = useEditor({
     extensions: [
@@ -837,7 +841,21 @@ export const EditorPane = ({
     }
 
     const sameMemo = editingMemoIdRef.current === memo.id;
+    const shouldPreserveUnsavedContent =
+      Boolean(preserveUnsavedContentFromMemoId) &&
+      editingMemoIdRef.current === preserveUnsavedContentFromMemoId &&
+      memo.id !== preserveUnsavedContentFromMemoId &&
+      hasUnsavedChangesRef.current &&
+      !memo.isDeleted;
+
     memoRef.current = memo;
+
+    if (shouldPreserveUnsavedContent) {
+      editingMemoIdRef.current = memo.id;
+      setSaveState("idle");
+      void localDb.drafts.delete(preserveUnsavedContentFromMemoId as string);
+      return;
+    }
 
     if (sameMemo && hasUnsavedChangesRef.current && !memo.isDeleted) {
       return;
@@ -883,7 +901,7 @@ export const EditorPane = ({
     return () => {
       cancelled = true;
     };
-  }, [isTrashView, memo, editor]);
+  }, [isTrashView, memo, editor, preserveUnsavedContentFromMemoId]);
 
   useEffect(() => {
     if (isEditorReady(editor)) {
@@ -919,6 +937,10 @@ export const EditorPane = ({
         throw new Error("No memo selected");
       }
 
+      if (saveBlocked) {
+        throw new Error("Memo is not ready to save");
+      }
+
       if (currentMemo.isDeleted) {
         throw new Error("Deleted memos are read-only");
       }
@@ -951,7 +973,11 @@ export const EditorPane = ({
 
       return { memo: data.memo, snapshot };
     },
-    onMutate: () => setSaveState("saving"),
+    onMutate: () => {
+      if (!saveBlocked) {
+        setSaveState("saving");
+      }
+    },
     onSuccess: async ({ memo: savedMemo, snapshot }) => {
       memoRef.current = savedMemo;
       await onSaved(savedMemo);
@@ -1008,6 +1034,7 @@ export const EditorPane = ({
       memo.isDeleted ||
       !editor ||
       !hasUnsavedChanges ||
+      saveBlocked ||
       saveMutation.isPending ||
       saveState === "conflict"
     ) {
@@ -1019,7 +1046,7 @@ export const EditorPane = ({
     }, 1200);
 
     return () => window.clearTimeout(timer);
-  }, [dirtyVersion, editor, hasUnsavedChanges, memo, saveMutation, saveState]);
+  }, [dirtyVersion, editor, hasUnsavedChanges, memo, saveBlocked, saveMutation, saveState]);
 
   if (isSelectionMode) {
     return (
@@ -1106,7 +1133,7 @@ export const EditorPane = ({
     : "0/0";
 
   const updateMemoNotebook = (notebookId: string, sourceMemo: MemoDetail = memoRef.current ?? memo) => {
-    if (effectiveReadOnly || notebookId === sourceMemo.notebookId || notebookUpdatePending) {
+    if (saveBlocked || effectiveReadOnly || notebookId === sourceMemo.notebookId || notebookUpdatePending) {
       setMobileNotebookSheetOpen(false);
       return;
     }
@@ -1133,7 +1160,7 @@ export const EditorPane = ({
   };
 
   const handleNotebookChange = (notebookId: string) => {
-    if (!hasUnsavedChanges || saveMutation.isPending) {
+    if (saveBlocked || !hasUnsavedChanges || saveMutation.isPending) {
       updateMemoNotebook(notebookId);
       return;
     }
@@ -1144,7 +1171,7 @@ export const EditorPane = ({
   };
 
   const handleMobileBack = () => {
-    if (readOnly || !editor || !hasUnsavedChanges) {
+    if (readOnly || saveBlocked || !editor || !hasUnsavedChanges) {
       onBackToList();
       return;
     }
@@ -1161,7 +1188,7 @@ export const EditorPane = ({
   };
 
   const handleMobileDone = () => {
-    if (readOnly || !editor || !hasUnsavedChanges) {
+    if (readOnly || saveBlocked || !editor || !hasUnsavedChanges) {
       setIsMobileEditing(false);
       setMobileToolbarOpen(false);
       return;
@@ -1285,7 +1312,7 @@ export const EditorPane = ({
                 variant="ghost"
                 title={t("editor.uploadAttachment")}
                 aria-label={t("editor.uploadAttachment")}
-                disabled={mobileDoneDisabled || effectiveReadOnly}
+                disabled={mobileDoneDisabled || effectiveReadOnly || saveBlocked}
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Paperclip className="h-4 w-4" />
@@ -1308,7 +1335,7 @@ export const EditorPane = ({
             <Button className="hidden sm:inline-flex" size="icon" variant="ghost" title={t("editor.searchCurrentMemo")} aria-label={t("editor.searchCurrentMemo")} onClick={() => openNoteSearch()}>
               <Search className="h-4 w-4" />
             </Button>
-            <Button className="hidden sm:inline-flex" size="icon" variant="ghost" title={t("editor.versionHistory")} aria-label={t("editor.versionHistory")} onClick={() => setHistoryOpen(true)}>
+            <Button className="hidden sm:inline-flex" size="icon" variant="ghost" title={t("editor.versionHistory")} aria-label={t("editor.versionHistory")} disabled={saveBlocked} onClick={() => setHistoryOpen(true)}>
               <History className="h-4 w-4" />
             </Button>
             <GitHubRepositoryLink className="hidden h-8 w-8 justify-center rounded-md text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70 lg:inline-flex" />
@@ -1320,7 +1347,7 @@ export const EditorPane = ({
                 title={t("editor.save")}
                 aria-label={t("editor.save")}
                 onClick={() => saveMutation.mutate()}
-                disabled={!editor || saveMutation.isPending || !hasUnsavedChanges}
+                disabled={!editor || saveBlocked || saveMutation.isPending || !hasUnsavedChanges}
               >
                 <Save className="h-4 w-4" />
               </Button>
@@ -1354,6 +1381,7 @@ export const EditorPane = ({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="flex h-9 w-full items-center gap-2 px-3 text-left text-sm text-slate-700 hover:bg-slate-50 cursor-pointer outline-none"
+                  disabled={saveBlocked}
                   onClick={() => {
                     setHistoryOpen(true);
                   }}
@@ -1373,6 +1401,7 @@ export const EditorPane = ({
                     <DropdownMenuSeparator className="my-1 h-px bg-slate-100" />
                     <DropdownMenuItem
                       className="flex h-9 w-full items-center gap-2 px-3 text-left text-sm text-rose-700 hover:bg-rose-50 cursor-pointer outline-none"
+                      disabled={saveBlocked}
                       onClick={() => void onPermanentDeleted(memo.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -1384,6 +1413,7 @@ export const EditorPane = ({
                     <DropdownMenuSeparator className="my-1 h-px bg-slate-100" />
                     <DropdownMenuItem
                       className="flex h-9 w-full items-center gap-2 px-3 text-left text-sm text-rose-700 hover:bg-rose-50 cursor-pointer outline-none"
+                      disabled={saveBlocked}
                       onClick={() => void onDeleted(memo.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -1412,7 +1442,7 @@ export const EditorPane = ({
             <button
               className="flex h-8 min-w-0 max-w-full items-center gap-1 rounded-md border border-transparent bg-transparent px-2 text-sm font-medium text-slate-600 outline-none transition hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900 focus-visible:border-emerald-300 focus-visible:ring-2 focus-visible:ring-emerald-500/20 disabled:opacity-50 sm:hidden"
               type="button"
-              disabled={effectiveReadOnly || notebookUpdatePending}
+              disabled={saveBlocked || effectiveReadOnly || notebookUpdatePending}
               title={t("editor.currentNotebook")}
               aria-label={t("editor.currentNotebookAria", { name: currentNotebookLabel })}
               onClick={() => setMobileNotebookSheetOpen(true)}
@@ -1423,7 +1453,7 @@ export const EditorPane = ({
             <div className="hidden min-w-[9rem] max-w-[18rem] sm:block">
               <Select
                 value={memo.notebookId}
-                disabled={effectiveReadOnly || notebookUpdatePending}
+                disabled={saveBlocked || effectiveReadOnly || notebookUpdatePending}
                 onValueChange={(value) => handleNotebookChange(value)}
               >
                 <SelectTrigger className="h-8 min-w-0 border-transparent bg-transparent px-2 text-sm font-medium text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900 whitespace-nowrap">
@@ -1580,7 +1610,7 @@ export const EditorPane = ({
 
       {mobileNotebookSheetOpen && (
         <MobileNotebookSelectSheet
-          isUpdating={notebookUpdatePending || saveMutation.isPending}
+          isUpdating={saveBlocked || notebookUpdatePending || saveMutation.isPending}
           options={notebookOptions}
           selectedNotebookId={memo.notebookId}
           onClose={() => setMobileNotebookSheetOpen(false)}
