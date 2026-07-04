@@ -211,9 +211,21 @@
       const docToMarkdown = (doc) => {
         if (!doc || !Array.isArray(doc.content)) return "";
         return doc.content
-          .map((node) => inlineText(node && node.content))
+          .map((node) => blockToMarkdown(node))
           .filter(Boolean)
           .join("\\n\\n");
+      };
+
+      const blockToMarkdown = (node) => {
+        if (!node || typeof node !== "object") return "";
+        if (node.type === "image") return imageToMarkdown(node.attrs);
+        if (node.type === "heading") {
+          const level = Math.min(Math.max(Number(node.attrs && node.attrs.level) || 1, 1), 6);
+          const text = inlineText(node.content);
+          return text ? `${"#".repeat(level)} ${text}` : "";
+        }
+        if (node.type === "horizontalRule") return "---";
+        return inlineText(node.content);
       };
 
       const inlineText = (content) => {
@@ -223,9 +235,24 @@
             if (!node || typeof node !== "object") return "";
             if (typeof node.text === "string") return node.text;
             if (node.type === "hardBreak") return "\\n";
+            if (node.type === "image") return imageToMarkdown(node.attrs);
             return inlineText(node.content);
           })
           .join("");
+      };
+
+      const imageToMarkdown = (attrs) => {
+        const src = stringAttr(attrs, "src");
+        if (!src) return "";
+        const alt = stringAttr(attrs, "alt").replace(/\]/g, "\\]");
+        const title = stringAttr(attrs, "title");
+        const titleSuffix = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
+        return `![${alt}](${src}${titleSuffix})`;
+      };
+
+      const stringAttr = (attrs, key) => {
+        const value = attrs && attrs[key];
+        return typeof value === "string" ? value.trim() : "";
       };
 
       const parseTags = (value) =>
