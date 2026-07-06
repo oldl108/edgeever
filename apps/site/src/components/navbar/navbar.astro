@@ -18,20 +18,29 @@ const menuitems = [
     path: getLocalizedPath(locale, "/blog/ai-agent-deploy-cloudflare"),
   },
   {
-    title: copy.migration,
-    path: getLocalizedPath(locale, "/guides/evernote-migration"),
-  },
-  {
-    title: copy.advancedPlay,
-    path: getLocalizedPath(locale, "/guides/advanced-play"),
+    title: copy.guides,
+    children: [
+      {
+        title: copy.evernoteMigration,
+        path: getLocalizedPath(locale, "/guides/evernote-migration"),
+      },
+      {
+        title: copy.memosMigration,
+        path: getLocalizedPath(locale, "/guides/memos-migration"),
+      },
+      {
+        title: copy.notionMigration,
+        path: getLocalizedPath(locale, "/guides/notion-migration"),
+      },
+      {
+        title: copy.advancedPlay,
+        path: getLocalizedPath(locale, "/guides/advanced-play"),
+      },
+    ],
   },
   {
     title: copy.blog,
     path: getLocalizedPath(locale, "/blog"),
-  },
-  {
-    title: copy.contact,
-    path: getLocalizedPath(locale, "/contact"),
   },
 ];
 ---

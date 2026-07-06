@@ -19,6 +19,15 @@ const copy = siteCopy[locale].hero;
   <Meteors number={20} client:load />
 
   <div class="md:order-1 relative z-10 w-full">
+    {copy.badgeText && (
+      <div class="inline-flex items-center gap-2 px-3.5 py-1 mb-6 text-xs text-brand bg-brand/5 border border-brand-border/30 rounded-full backdrop-blur-sm select-none hover:-translate-y-0.5 transition-all duration-300">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-brand"></span>
+        </span>
+        <span class="text-slate-600 font-medium">{copy.badgeText}</span>
+      </div>
+    )}
     <h1 class="text-4xl md:text-5xl xl:text-6xl font-bold text-slate-900 leading-tight">
       <span class="text-gradient">EdgeEver</span>
       <span class="hero-slogan block mt-4 max-w-xl text-xl md:text-2xl font-medium leading-relaxed text-slate-700">{copy.slogan}</span>
