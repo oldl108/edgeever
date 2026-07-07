@@ -8,6 +8,10 @@ export const PwaInstallCard = () => {
   const { t } = useTranslation();
   const { isInstallable, isInstalled, isIOS, install } = usePwaInstall();
 
+  if (isInstalled) {
+    return null;
+  }
+
   return (
     <Card className="w-full min-w-0 overflow-hidden shadow-none">
       <CardHeader className="p-4">
