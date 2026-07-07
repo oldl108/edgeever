@@ -73,7 +73,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,woff2}"],
         navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//, /^\/mcp\//, /^\/tiptap-ime-test\.html$/],
+        navigateFallbackDenylist: [/^\/api\//, /^\/mcp\//, /^\/mobile-edit\.html$/, /^\/tiptap-ime-test\.html$/],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith("/api/") || url.pathname.startsWith("/mcp/"),
@@ -106,6 +106,7 @@ export default defineConfig({
     rolldownOptions: {
       input: {
         app: fileURLToPath(new URL("./index.html", import.meta.url)),
+        "mobile-edit": fileURLToPath(new URL("./mobile-edit.html", import.meta.url)),
         "tiptap-ime-test": fileURLToPath(new URL("./tiptap-ime-test.html", import.meta.url)),
       },
       output: {
