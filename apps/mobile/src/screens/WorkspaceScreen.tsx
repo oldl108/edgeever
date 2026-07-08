@@ -47,9 +47,53 @@ import { useSession } from "../lib/session";
 
 const ALL_NOTES_ID = "all";
 const DEFAULT_MEMO_TITLE = "无标题笔记";
+const MEMO_TEMPLATES: MemoTemplate[] = [
+  {
+    id: "quick-note",
+    title: "速记",
+    description: "适合临时记录想法、链接和灵感。",
+    contentMarkdown: "## 速记\n\n- \n\n## 后续动作\n\n- [ ] ",
+    tags: ["template", "quick-note"],
+  },
+  {
+    id: "meeting",
+    title: "会议记录",
+    description: "议题、结论和待办放在同一页。",
+    contentMarkdown: "## 会议记录\n\n时间：\n参与人：\n\n## 议题\n\n- \n\n## 结论\n\n- \n\n## 待办\n\n- [ ] ",
+    tags: ["template", "meeting"],
+  },
+  {
+    id: "checklist",
+    title: "清单",
+    description: "快速列出待办、采购、项目检查项。",
+    contentMarkdown: "## 清单\n\n- [ ] \n- [ ] \n- [ ] ",
+    tags: ["template", "checklist"],
+  },
+  {
+    id: "reading",
+    title: "读书笔记",
+    description: "摘录、观点和下一步阅读整理。",
+    contentMarkdown: "## 读书笔记\n\n书名：\n作者：\n\n## 摘录\n\n> \n\n## 我的观点\n\n\n## 延伸问题\n\n- ",
+    tags: ["template", "reading"],
+  },
+  {
+    id: "daily",
+    title: "每日复盘",
+    description: "记录今天完成了什么、卡在哪里。",
+    contentMarkdown: "## 每日复盘\n\n## 今天完成\n\n- \n\n## 遇到的问题\n\n- \n\n## 明天优先级\n\n- [ ] ",
+    tags: ["template", "daily"],
+  },
+];
 
 type MobileView = "notes" | "search" | "account" | "settings";
 type MemoView = "notebook" | "trash";
+type MemoTemplate = {
+  id: string;
+  title: string;
+  description: string;
+  contentMarkdown: string;
+  tags: string[];
+};
 
 export const WorkspaceScreen = () => {
   const { client, session, signOut } = useSession();
@@ -62,6 +106,7 @@ export const WorkspaceScreen = () => {
   const [selectedMemoId, setSelectedMemoId] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [editingMemo, setEditingMemo] = useState<MemoDetail | null>(null);
   const [notebookManagerOpen, setNotebookManagerOpen] = useState(false);
   const [tagsManagerOpen, setTagsManagerOpen] = useState(false);
@@ -392,6 +437,7 @@ export const WorkspaceScreen = () => {
           onCreate={() => setCreateOpen(true)}
           onEmptyTrash={handleEmptyTrash}
           onFilterModeChange={setMemoFilterMode}
+          onOpenTemplates={() => setTemplatesOpen(true)}
           onMemoPress={handleMemoPress}
           onMemoLongPress={toggleSelectedMemo}
           onRefresh={refresh}
@@ -426,6 +472,7 @@ export const WorkspaceScreen = () => {
           onOpenNotebookManager={() => setNotebookManagerOpen(true)}
           onOpenResources={() => setResourcesOpen(true)}
           onOpenTagsManager={() => setTagsManagerOpen(true)}
+          onOpenTemplates={() => setTemplatesOpen(true)}
         />
       ) : null}
 
@@ -478,6 +525,19 @@ export const WorkspaceScreen = () => {
           setSelectedMemoId(memo.id);
         }}
         visible={createOpen}
+      />
+
+      <TemplatesModal
+        activeNotebookId={activeNotebookId}
+        notebooks={notebooks}
+        onClose={() => setTemplatesOpen(false)}
+        onCreated={(memo) => {
+          setTemplatesOpen(false);
+          setActiveView("notes");
+          setMemoView("notebook");
+          setSelectedMemoId(memo.id);
+        }}
+        visible={templatesOpen}
       />
 
       <MoveSelectionModal
@@ -574,6 +634,7 @@ const NotesView = ({
   onFilterModeChange,
   onMemoLongPress,
   onMemoPress,
+  onOpenTemplates,
   onRefresh,
   onSelectNotebook,
   onSetMemoView,
@@ -599,6 +660,7 @@ const NotesView = ({
   onFilterModeChange: (filterMode: MemoFilterMode) => void;
   onMemoLongPress: (memoId: string) => void;
   onMemoPress: (memoId: string) => void;
+  onOpenTemplates: () => void;
   onRefresh: () => void;
   onSelectNotebook: (notebookId: string) => void;
   onSetMemoView: (memoView: MemoView) => void;
@@ -634,9 +696,14 @@ const NotesView = ({
           {memoView === "trash" ? <BookOpen color="#0f172a" size={18} /> : <Trash2 color="#0f172a" size={18} />}
         </Pressable>
         {memoView === "notebook" ? (
-          <Pressable accessibilityRole="button" onPress={onCreate} style={styles.primaryIconButton}>
-            <Plus color="#ffffff" size={20} />
-          </Pressable>
+          <>
+            <Pressable accessibilityRole="button" onPress={onOpenTemplates} style={styles.secondaryIconButton}>
+              <FileText color="#0f172a" size={18} />
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={onCreate} style={styles.primaryIconButton}>
+              <Plus color="#ffffff" size={20} />
+            </Pressable>
+          </>
         ) : (
           <Pressable
             accessibilityRole="button"
@@ -763,12 +830,14 @@ const SettingsView = ({
   onOpenNotebookManager,
   onOpenResources,
   onOpenTagsManager,
+  onOpenTemplates,
 }: {
   memoCount: number;
   notebookCount: number;
   onOpenNotebookManager: () => void;
   onOpenResources: () => void;
   onOpenTagsManager: () => void;
+  onOpenTemplates: () => void;
 }) => (
   <ScrollView contentContainerStyle={styles.panelList} style={styles.viewBody}>
     <Text style={styles.sectionTitle}>设置</Text>
@@ -780,6 +849,9 @@ const SettingsView = ({
     </Pressable>
     <Pressable onPress={onOpenResources}>
       <PanelRow label="资源库" value="图片、附件、来源笔记" />
+    </Pressable>
+    <Pressable onPress={onOpenTemplates}>
+      <PanelRow label="模板" value="速记、会议、清单、读书、复盘" />
     </Pressable>
     <PanelRow label="移动端形态" value="React Native" />
     <PanelRow label="笔记本数量" value={String(notebookCount)} />
@@ -889,6 +961,96 @@ const CreateMemoModal = ({
 
           {createMutation.error ? (
             <Text style={styles.errorText}>{createMutation.error instanceof Error ? createMutation.error.message : "创建失败"}</Text>
+          ) : null}
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+};
+
+const TemplatesModal = ({
+  activeNotebookId,
+  notebooks,
+  onClose,
+  onCreated,
+  visible,
+}: {
+  activeNotebookId: string;
+  notebooks: Notebook[];
+  onClose: () => void;
+  onCreated: (memo: MemoDetail) => void;
+  visible: boolean;
+}) => {
+  const { client } = useSession();
+  const queryClient = useQueryClient();
+  const targetNotebookId = activeNotebookId !== ALL_NOTES_ID ? activeNotebookId : notebooks[0]?.id ?? "";
+
+  const createFromTemplateMutation = useMutation({
+    mutationFn: async (template: MemoTemplate) => {
+      if (!client) {
+        throw new Error("Client is not ready");
+      }
+
+      if (!targetNotebookId) {
+        throw new Error("请先创建一个笔记本");
+      }
+
+      const response = await client.createMemo({
+        notebookId: targetNotebookId,
+        title: template.title,
+        contentMarkdown: template.contentMarkdown,
+        tags: template.tags,
+      });
+
+      return response.memo;
+    },
+    onSuccess: async (memo) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["mobile", "notebooks"] }),
+        queryClient.invalidateQueries({ queryKey: ["mobile", "memos"] }),
+        queryClient.invalidateQueries({ queryKey: ["mobile", "tags"] }),
+      ]);
+      onCreated(memo);
+    },
+  });
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible={visible}>
+      <SafeAreaView style={styles.modalSafeArea}>
+        <View style={styles.modalHeader}>
+          <IconButton onPress={onClose}>
+            <X color="#0f172a" size={20} />
+          </IconButton>
+          <Text style={styles.modalTitle}>模板</Text>
+          <View style={styles.iconButtonPlaceholder} />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.editorForm}>
+          <Text style={styles.sectionSubtitle}>选择一个模板，直接创建新笔记。</Text>
+          {!targetNotebookId ? (
+            <View style={styles.warningPanel}>
+              <Text style={styles.warningText}>当前无法创建笔记，请先创建可用笔记本。</Text>
+            </View>
+          ) : null}
+          {MEMO_TEMPLATES.map((template) => (
+            <Pressable
+              disabled={!targetNotebookId || createFromTemplateMutation.isPending}
+              key={template.id}
+              onPress={() => createFromTemplateMutation.mutate(template)}
+              style={[styles.templateCard, (!targetNotebookId || createFromTemplateMutation.isPending) && styles.buttonDisabled]}
+            >
+              <View style={styles.templateIcon}>
+                <FileText color="#047857" size={20} />
+              </View>
+              <View style={styles.templateText}>
+                <Text style={styles.panelValue}>{template.title}</Text>
+                <Text style={styles.panelLabel}>{template.description}</Text>
+              </View>
+              {createFromTemplateMutation.isPending ? <ActivityIndicator color="#0f172a" /> : null}
+            </Pressable>
+          ))}
+          {createFromTemplateMutation.error ? (
+            <Text style={styles.errorText}>{createFromTemplateMutation.error instanceof Error ? createFromTemplateMutation.error.message : "创建失败"}</Text>
           ) : null}
         </ScrollView>
       </SafeAreaView>
@@ -2556,6 +2718,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
   },
+  warningPanel: {
+    backgroundColor: "#fffbeb",
+    borderColor: "#fde68a",
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+  },
+  warningText: {
+    color: "#92400e",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+  },
   buttonDisabled: {
     opacity: 0.5,
   },
@@ -2666,6 +2841,32 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 60,
     padding: 10,
+  },
+  templateCard: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderColor: "#e2e8f0",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 82,
+    padding: 12,
+  },
+  templateIcon: {
+    alignItems: "center",
+    backgroundColor: "#f0fdf4",
+    borderColor: "#bbf7d0",
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  templateText: {
+    flex: 1,
+    gap: 5,
+    minWidth: 0,
   },
   moveNotebookRow: {
     alignItems: "center",
