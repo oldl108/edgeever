@@ -5,8 +5,10 @@ import {
   BookOpen,
   Check,
   FileText,
+  Folder,
   Home,
   LogOut,
+  Merge,
   Pencil,
   Pin,
   Plus,
@@ -54,6 +56,8 @@ export const WorkspaceScreen = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingMemo, setEditingMemo] = useState<MemoDetail | null>(null);
   const [notebookManagerOpen, setNotebookManagerOpen] = useState(false);
+  const [selectedMemoIds, setSelectedMemoIds] = useState<Set<string>>(() => new Set());
+  const [selectionMoveOpen, setSelectionMoveOpen] = useState(false);
 
   const notebooksQuery = useQuery({
     queryKey: ["mobile", "notebooks"],
@@ -126,7 +130,31 @@ export const WorkspaceScreen = () => {
   };
 
   const handleMemoPress = (memoId: string) => {
+    if (selectedMemoIds.size > 0) {
+      toggleSelectedMemo(memoId);
+      return;
+    }
+
     setSelectedMemoId(memoId);
+  };
+
+  const toggleSelectedMemo = (memoId: string) => {
+    setSelectedMemoIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(memoId)) {
+        next.delete(memoId);
+      } else {
+        next.add(memoId);
+      }
+
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedMemoIds(new Set());
+    setSelectionMoveOpen(false);
   };
 
   const closeDetail = () => {
@@ -138,6 +166,13 @@ export const WorkspaceScreen = () => {
   const searchResults = searchQuery.data?.memos ?? [];
   const selectedMemo = memoDetailQuery.data?.memo ?? null;
   const isRefreshing = notebooksQuery.isFetching || memosQuery.isFetching || searchQuery.isFetching || memoDetailQuery.isFetching;
+  const selectedMemoIdList = Array.from(selectedMemoIds);
+  const selectedMemos = memos.filter((memo) => selectedMemoIds.has(memo.id));
+  const nextSelectionPinValue = selectedMemos.some((memo) => !memo.isPinned);
+
+  useEffect(() => {
+    clearSelection();
+  }, [activeNotebookId, memoFilterMode, memoSortMode, memoView]);
 
   const invalidateWorkspace = async () => {
     await Promise.all([
@@ -212,6 +247,65 @@ export const WorkspaceScreen = () => {
     },
   });
 
+  const moveMemosMutation = useMutation({
+    mutationFn: async ({ memoIds, notebookId }: { memoIds: string[]; notebookId: string }) => {
+      if (!client) {
+        throw new Error("Client is not ready");
+      }
+
+      return client.moveMemos({ memoIds, notebookId });
+    },
+    onSuccess: async () => {
+      await invalidateWorkspace();
+      clearSelection();
+    },
+  });
+
+  const pinMemosMutation = useMutation({
+    mutationFn: async ({ memoIds, isPinned }: { memoIds: string[]; isPinned: boolean }) => {
+      if (!client) {
+        throw new Error("Client is not ready");
+      }
+
+      await Promise.all(memoIds.map((memoId) => client.updateMemo(memoId, { isPinned })));
+      return { ok: true };
+    },
+    onSuccess: async () => {
+      await invalidateWorkspace();
+      clearSelection();
+    },
+  });
+
+  const deleteMemosMutation = useMutation({
+    mutationFn: async ({ memoIds, permanent }: { memoIds: string[]; permanent: boolean }) => {
+      if (!client) {
+        throw new Error("Client is not ready");
+      }
+
+      return client.deleteMemos({ memoIds, permanent });
+    },
+    onSuccess: async () => {
+      await invalidateWorkspace();
+      clearSelection();
+    },
+  });
+
+  const mergeMemosMutation = useMutation({
+    mutationFn: async ({ memoIds, notebookId }: { memoIds: string[]; notebookId?: string }) => {
+      if (!client) {
+        throw new Error("Client is not ready");
+      }
+
+      const response = await client.mergeMemos({ memoIds, notebookId });
+      return response.memo;
+    },
+    onSuccess: async (memo) => {
+      await invalidateWorkspace();
+      clearSelection();
+      setSelectedMemoId(memo.id);
+    },
+  });
+
   const handleTogglePin = (memo: MemoDetail) => {
     updateMemoMutation.mutate({ memo, payload: { isPinned: !memo.isPinned } });
   };
@@ -238,6 +332,35 @@ export const WorkspaceScreen = () => {
     ]);
   };
 
+  const handleDeleteSelection = () => {
+    const permanent = memoView === "trash";
+
+    Alert.alert(permanent ? "永久删除选中笔记？" : "删除选中笔记？", permanent ? "此操作不可撤销。" : "选中的笔记会移动到回收站。", [
+      { text: "取消", style: "cancel" },
+      {
+        text: permanent ? "永久删除" : "删除",
+        style: "destructive",
+        onPress: () => deleteMemosMutation.mutate({ memoIds: selectedMemoIdList, permanent }),
+      },
+    ]);
+  };
+
+  const handleMergeSelection = () => {
+    if (selectedMemoIdList.length < 2) {
+      return;
+    }
+
+    const targetNotebookId = activeNotebookId === ALL_NOTES_ID ? selectedMemos[0]?.notebookId : activeNotebookId;
+
+    Alert.alert("合并选中笔记？", "服务端会把选中的笔记合并成一条新笔记。", [
+      { text: "取消", style: "cancel" },
+      {
+        text: "合并",
+        onPress: () => mergeMemosMutation.mutate({ memoIds: selectedMemoIdList, notebookId: targetNotebookId }),
+      },
+    ]);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <AppHeader instance={session?.baseUrl ?? ""} onRefresh={refresh} onSignOut={signOut} />
@@ -259,10 +382,12 @@ export const WorkspaceScreen = () => {
           onEmptyTrash={handleEmptyTrash}
           onFilterModeChange={setMemoFilterMode}
           onMemoPress={handleMemoPress}
+          onMemoLongPress={toggleSelectedMemo}
           onRefresh={refresh}
           onSelectNotebook={setActiveNotebookId}
           onSetMemoView={setMemoView}
           onSortModeChange={setMemoSortMode}
+          selectedMemoIds={selectedMemoIds}
           error={memosQuery.error}
           isError={memosQuery.isError}
           isEmptyingTrash={emptyTrashMutation.isPending}
@@ -323,6 +448,31 @@ export const WorkspaceScreen = () => {
         }}
         visible={createOpen}
       />
+
+      <MoveSelectionModal
+        isMoving={moveMemosMutation.isPending}
+        notebooks={notebooks}
+        onClose={() => setSelectionMoveOpen(false)}
+        onMove={(notebookId) => moveMemosMutation.mutate({ memoIds: selectedMemoIdList, notebookId })}
+        selectedCount={selectedMemoIds.size}
+        visible={selectionMoveOpen}
+      />
+
+      {activeView === "notes" && selectedMemoIds.size > 0 ? (
+        <SelectionActionBar
+          canMerge={memoView !== "trash" && selectedMemoIds.size >= 2}
+          canMove={memoView !== "trash"}
+          isBusy={deleteMemosMutation.isPending || moveMemosMutation.isPending || pinMemosMutation.isPending || mergeMemosMutation.isPending}
+          isTrashView={memoView === "trash"}
+          onClear={clearSelection}
+          onDelete={handleDeleteSelection}
+          onMerge={handleMergeSelection}
+          onMove={() => setSelectionMoveOpen(true)}
+          onPin={() => pinMemosMutation.mutate({ memoIds: selectedMemoIdList, isPinned: nextSelectionPinValue })}
+          pinLabel={nextSelectionPinValue ? "置顶" : "取消置顶"}
+          selectedCount={selectedMemoIds.size}
+        />
+      ) : null}
 
       <View style={styles.bottomNav}>
         <BottomNavItem
@@ -391,11 +541,13 @@ const NotesView = ({
   onCreate,
   onEmptyTrash,
   onFilterModeChange,
+  onMemoLongPress,
   onMemoPress,
   onRefresh,
   onSelectNotebook,
   onSetMemoView,
   onSortModeChange,
+  selectedMemoIds,
   isEmptyingTrash,
 }: {
   activeNotebook: Notebook | null;
@@ -414,11 +566,13 @@ const NotesView = ({
   onCreate: () => void;
   onEmptyTrash: () => void;
   onFilterModeChange: (filterMode: MemoFilterMode) => void;
+  onMemoLongPress: (memoId: string) => void;
   onMemoPress: (memoId: string) => void;
   onRefresh: () => void;
   onSelectNotebook: (notebookId: string) => void;
   onSetMemoView: (memoView: MemoView) => void;
   onSortModeChange: (sortMode: MemoSortMode) => void;
+  selectedMemoIds: Set<string>;
   isEmptyingTrash: boolean;
 }) => (
   <View style={styles.viewBody}>
@@ -489,8 +643,10 @@ const NotesView = ({
       isLoading={isLoading}
       isRefreshing={isRefreshing}
       memos={memos}
+      onMemoLongPress={onMemoLongPress}
       onMemoPress={onMemoPress}
       onRefresh={onRefresh}
+      selectedMemoIds={selectedMemoIds}
     />
   </View>
 );
@@ -1053,8 +1209,10 @@ const MemoList = ({
   isLoading,
   isRefreshing,
   memos,
+  onMemoLongPress,
   onMemoPress,
   onRefresh,
+  selectedMemoIds = new Set(),
 }: {
   emptyDescription: string;
   emptyTitle: string;
@@ -1063,8 +1221,10 @@ const MemoList = ({
   isLoading: boolean;
   isRefreshing: boolean;
   memos: MemoSummary[];
+  onMemoLongPress?: (memoId: string) => void;
   onMemoPress: (memoId: string) => void;
   onRefresh: () => void;
+  selectedMemoIds?: Set<string>;
 }) => {
   if (isLoading) {
     return (
@@ -1089,7 +1249,15 @@ const MemoList = ({
       data={memos}
       keyExtractor={(memo) => memo.id}
       refreshControl={<RefreshControl onRefresh={onRefresh} refreshing={isRefreshing} tintColor="#0f172a" />}
-      renderItem={({ item }) => <MemoCard memo={item} onPress={() => onMemoPress(item.id)} />}
+      renderItem={({ item }) => (
+        <MemoCard
+          memo={item}
+          onLongPress={onMemoLongPress ? () => onMemoLongPress(item.id) : undefined}
+          onPress={() => onMemoPress(item.id)}
+          selected={selectedMemoIds.has(item.id)}
+          selectionMode={selectedMemoIds.size > 0}
+        />
+      )}
       ListEmptyComponent={
         <View style={styles.centerState}>
           <BookOpen color="#94a3b8" size={32} />
@@ -1100,6 +1268,126 @@ const MemoList = ({
     />
   );
 };
+
+const MoveSelectionModal = ({
+  isMoving,
+  notebooks,
+  onClose,
+  onMove,
+  selectedCount,
+  visible,
+}: {
+  isMoving: boolean;
+  notebooks: Notebook[];
+  onClose: () => void;
+  onMove: (notebookId: string) => void;
+  selectedCount: number;
+  visible: boolean;
+}) => {
+  const [targetNotebookId, setTargetNotebookId] = useState("");
+
+  useEffect(() => {
+    if (visible) {
+      setTargetNotebookId(notebooks[0]?.id ?? "");
+    }
+  }, [notebooks, visible]);
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible={visible}>
+      <SafeAreaView style={styles.modalSafeArea}>
+        <View style={styles.modalHeader}>
+          <IconButton onPress={onClose}>
+            <X color="#0f172a" size={20} />
+          </IconButton>
+          <Text style={styles.modalTitle}>移动笔记</Text>
+          <IconButton onPress={() => targetNotebookId && onMove(targetNotebookId)}>
+            {isMoving ? <ActivityIndicator color="#0f172a" /> : <Check color="#0f172a" size={20} />}
+          </IconButton>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.editorForm}>
+          <Text style={styles.sectionSubtitle}>已选择 {selectedCount} 条笔记</Text>
+          <Text style={styles.label}>目标笔记本</Text>
+          {notebooks.map((notebook) => (
+            <Pressable
+              key={notebook.id}
+              onPress={() => setTargetNotebookId(notebook.id)}
+              style={[styles.moveNotebookRow, targetNotebookId === notebook.id && styles.moveNotebookRowActive]}
+            >
+              <View style={styles.moveNotebookText}>
+                <Text numberOfLines={1} style={styles.panelValue}>
+                  {notebook.name}
+                </Text>
+                <Text style={styles.panelLabel}>{notebook.memoCount} 条笔记</Text>
+              </View>
+              {targetNotebookId === notebook.id ? <Check color="#0f172a" size={18} /> : null}
+            </Pressable>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+};
+
+const SelectionActionBar = ({
+  canMerge,
+  canMove,
+  isBusy,
+  isTrashView,
+  onClear,
+  onDelete,
+  onMerge,
+  onMove,
+  onPin,
+  pinLabel,
+  selectedCount,
+}: {
+  canMerge: boolean;
+  canMove: boolean;
+  isBusy: boolean;
+  isTrashView: boolean;
+  onClear: () => void;
+  onDelete: () => void;
+  onMerge: () => void;
+  onMove: () => void;
+  onPin: () => void;
+  pinLabel: string;
+  selectedCount: number;
+}) => (
+  <View style={styles.selectionBar}>
+    <View style={styles.selectionBarHeader}>
+      <Text style={styles.selectionCount}>已选 {selectedCount} 条</Text>
+      <Pressable onPress={onClear}>
+        <Text style={styles.selectionClear}>取消</Text>
+      </Pressable>
+    </View>
+    <View style={styles.selectionActions}>
+      <SelectionAction disabled={isBusy || !canMove} icon={<Folder color={canMove ? "#0f172a" : "#cbd5e1"} size={18} />} label="移动" onPress={onMove} />
+      <SelectionAction disabled={isBusy || isTrashView} icon={<Pin color={isTrashView ? "#cbd5e1" : "#0f172a"} size={18} />} label={pinLabel} onPress={onPin} />
+      <SelectionAction disabled={isBusy || !canMerge} icon={<Merge color={canMerge ? "#0f172a" : "#cbd5e1"} size={18} />} label="合并" onPress={onMerge} />
+      <SelectionAction danger disabled={isBusy} icon={<Trash2 color="#b91c1c" size={18} />} label={isTrashView ? "永久删除" : "删除"} onPress={onDelete} />
+    </View>
+  </View>
+);
+
+const SelectionAction = ({
+  danger = false,
+  disabled = false,
+  icon,
+  label,
+  onPress,
+}: {
+  danger?: boolean;
+  disabled?: boolean;
+  icon: ReactNode;
+  label: string;
+  onPress: () => void;
+}) => (
+  <Pressable disabled={disabled} onPress={onPress} style={[styles.selectionAction, disabled && styles.buttonDisabled]}>
+    {icon}
+    <Text style={[styles.selectionActionText, danger && styles.selectionActionTextDanger]}>{label}</Text>
+  </Pressable>
+);
 
 const NotebookPill = ({
   active,
@@ -1126,10 +1414,28 @@ const OptionPill = ({ active, label, onPress }: { active: boolean; label: string
   </Pressable>
 );
 
-const MemoCard = ({ memo, onPress }: { memo: MemoSummary; onPress: () => void }) => (
-  <Pressable onPress={onPress} style={styles.memoCard}>
+const MemoCard = ({
+  memo,
+  onLongPress,
+  onPress,
+  selected = false,
+  selectionMode = false,
+}: {
+  memo: MemoSummary;
+  onLongPress?: () => void;
+  onPress: () => void;
+  selected?: boolean;
+  selectionMode?: boolean;
+}) => (
+  <Pressable onLongPress={onLongPress} onPress={onPress} style={[styles.memoCard, selected && styles.memoCardSelected]}>
     <View style={styles.memoCardTop}>
-      <FileText color="#64748b" size={18} />
+      {selectionMode ? (
+        <View style={[styles.selectionIndicator, selected && styles.selectionIndicatorActive]}>
+          {selected ? <Check color="#ffffff" size={14} /> : null}
+        </View>
+      ) : (
+        <FileText color="#64748b" size={18} />
+      )}
       <Text numberOfLines={1} style={styles.memoTitle}>
         {memo.title?.trim() || DEFAULT_MEMO_TITLE}
       </Text>
@@ -1406,10 +1712,27 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     padding: 14,
   },
+  memoCardSelected: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#0f172a",
+  },
   memoCardTop: {
     alignItems: "center",
     flexDirection: "row",
     gap: 8,
+  },
+  selectionIndicator: {
+    alignItems: "center",
+    borderColor: "#cbd5e1",
+    borderRadius: 6,
+    borderWidth: 1,
+    height: 20,
+    justifyContent: "center",
+    width: 20,
+  },
+  selectionIndicatorActive: {
+    backgroundColor: "#0f172a",
+    borderColor: "#0f172a",
   },
   memoTitle: {
     color: "#0f172a",
@@ -1618,6 +1941,25 @@ const styles = StyleSheet.create({
     gap: 4,
     minWidth: 0,
   },
+  moveNotebookRow: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderColor: "#e2e8f0",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 58,
+    padding: 12,
+  },
+  moveNotebookRowActive: {
+    borderColor: "#0f172a",
+  },
+  moveNotebookText: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
   editorForm: {
     gap: 12,
     padding: 18,
@@ -1661,6 +2003,57 @@ const styles = StyleSheet.create({
     left: 0,
     position: "absolute",
     right: 0,
+  },
+  selectionBar: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e2e8f0",
+    borderTopWidth: 1,
+    bottom: 64,
+    left: 0,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 12,
+    position: "absolute",
+    right: 0,
+  },
+  selectionBarHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  selectionCount: {
+    color: "#0f172a",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  selectionClear: {
+    color: "#2563eb",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  selectionActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  selectionAction: {
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderColor: "#e2e8f0",
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    gap: 4,
+    justifyContent: "center",
+    minHeight: 54,
+  },
+  selectionActionText: {
+    color: "#0f172a",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  selectionActionTextDanger: {
+    color: "#b91c1c",
   },
   bottomNavItem: {
     alignItems: "center",
