@@ -1716,7 +1716,14 @@ const TemplatesModal = ({
 }) => {
   const { client } = useSession();
   const queryClient = useQueryClient();
-  const targetNotebookId = activeNotebookId !== ALL_NOTES_ID ? activeNotebookId : notebooks[0]?.id ?? "";
+  const fallbackNotebookId = activeNotebookId !== ALL_NOTES_ID ? activeNotebookId : notebooks[0]?.id ?? "";
+  const [targetNotebookId, setTargetNotebookId] = useState(fallbackNotebookId);
+
+  useEffect(() => {
+    if (visible) {
+      setTargetNotebookId(fallbackNotebookId);
+    }
+  }, [fallbackNotebookId, visible]);
 
   const createFromTemplateMutation = useMutation({
     mutationFn: async (template: MemoTemplate) => {
@@ -1760,6 +1767,8 @@ const TemplatesModal = ({
 
         <ScrollView contentContainerStyle={styles.editorForm}>
           <Text style={styles.sectionSubtitle}>选择一个模板，直接创建新笔记。</Text>
+          <Text style={styles.label}>目标笔记本</Text>
+          <NotebookPicker notebooks={notebooks} onChange={setTargetNotebookId} selectedNotebookId={targetNotebookId || fallbackNotebookId} />
           {!targetNotebookId ? (
             <View style={styles.warningPanel}>
               <Text style={styles.warningText}>当前无法创建笔记，请先创建可用笔记本。</Text>
