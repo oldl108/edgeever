@@ -3645,6 +3645,7 @@ const EditMemoModal = ({
   const [replaceValue, setReplaceValue] = useState("");
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [insertTextOpen, setInsertTextOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const replaceMatches = useMemo(() => getTextSearchMatches(contentMarkdown, replaceQuery), [contentMarkdown, replaceQuery]);
 
   useEffect(() => {
@@ -3659,6 +3660,7 @@ const EditMemoModal = ({
       setTagsText(memo.tags.join(", "));
       setReplaceQuery("");
       setReplaceValue("");
+      setUploadProgress("");
       readMobileMemoDraft(memo.id).then((draft) => {
         if (!mounted) {
           return;
@@ -3675,6 +3677,7 @@ const EditMemoModal = ({
       });
     } else {
       setDraftLoaded(false);
+      setUploadProgress("");
     }
 
     return () => {
@@ -3740,11 +3743,14 @@ const EditMemoModal = ({
 
       const uploadedResources = [];
 
-      for (const asset of assets) {
+      for (const [index, asset] of assets.entries()) {
+        const filename = asset.name || "文件";
+        setUploadProgress(`处理 ${index + 1}/${assets.length}：${filename}`);
         const form = new FormData();
         const uploadAsset = await prepareUploadAsset(asset, imageCompressionEnabled);
         form.append("file", uploadAsset as unknown as Blob);
 
+        setUploadProgress(`上传 ${index + 1}/${assets.length}：${uploadAsset.name || filename}`);
         const { resource } = await client.uploadMemoResource(memo.id, form);
         uploadedResources.push({
           filename: resource.filename || uploadAsset.name || asset.name || "upload",
@@ -3753,10 +3759,12 @@ const EditMemoModal = ({
         });
       }
 
+      setUploadProgress("插入正文");
       return uploadedResources;
     },
     onSuccess: (resources) => {
       if (!resources || resources.length === 0) {
+        setUploadProgress("");
         return;
       }
 
@@ -3766,6 +3774,10 @@ const EditMemoModal = ({
       );
       setContentMarkdown(next.value);
       setContentSelection(next.selection);
+      setUploadProgress(`已插入 ${resources.length} 个资源`);
+    },
+    onError: () => {
+      setUploadProgress("");
     },
   });
 
@@ -3874,6 +3886,7 @@ const EditMemoModal = ({
             onPasteText={() => void pasteClipboardText()}
             onUploadResource={() => uploadResourceMutation.mutate()}
           />
+          {uploadProgress ? <Text style={styles.assetsHint}>{uploadProgress}</Text> : null}
           <View style={styles.noteSearchPanel}>
             <View style={styles.searchBox}>
               <Search color="#64748b" size={18} />
