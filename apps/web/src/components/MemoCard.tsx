@@ -373,8 +373,8 @@ export const MemoCard = ({
           </div>
           <div
             className={cn(
-              "line-clamp-2 min-h-10 text-[15px] leading-5 text-slate-600",
-              listDensity === "compact" && "line-clamp-1 min-h-0 text-sm"
+              "line-clamp-2 min-h-10 text-sm leading-5 text-slate-700",
+              listDensity === "compact" && "line-clamp-1 min-h-0 text-[13px]"
             )}
           >
             {memoExcerpt}
