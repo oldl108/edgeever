@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import * as DocumentPicker from "expo-document-picker";
@@ -47,6 +47,8 @@ import {
 import {
   ActivityIndicator,
   Alert,
+  AppState,
+  type AppStateStatus,
   FlatList,
   Image as RNImage,
   Linking,
@@ -207,6 +209,8 @@ export const WorkspaceScreen = () => {
   const [syncQueueSummary, setSyncQueueSummary] = useState<MobileSyncQueueSummary>(() => emptyMobileSyncQueueSummary());
   const [syncQueueMessage, setSyncQueueMessage] = useState("");
   const [isSyncingQueue, setIsSyncingQueue] = useState(false);
+  const [lastAutoSyncAt, setLastAutoSyncAt] = useState<string | null>(null);
+  const autoSyncRunningRef = useRef(false);
 
   const notebooksQuery = useQuery({
     queryKey: ["mobile", "notebooks"],
@@ -607,6 +611,60 @@ export const WorkspaceScreen = () => {
       setIsSyncingQueue(false);
     }
   };
+
+  const runAutomaticSync = async () => {
+    if (!client || autoSyncRunningRef.current) {
+      return;
+    }
+
+    autoSyncRunningRef.current = true;
+
+    const summary = await loadMobileSyncQueueSummary();
+    setSyncQueueSummary(summary);
+
+    if (summary.pending + summary.error + summary.syncing === 0) {
+      autoSyncRunningRef.current = false;
+      return;
+    }
+
+    setIsSyncingQueue(true);
+    setSyncQueueMessage("正在自动同步本地变更");
+
+    try {
+      const result = await syncMobileQueuedChanges(client, {
+        onSynced: async (memo) => {
+          queryClient.setQueryData(["mobile", "memo", "notebook", memo.id], { memo });
+          queryClient.setQueryData(["mobile", "memo", "trash", memo.id], { memo });
+        },
+      });
+      await invalidateWorkspace();
+      setSyncQueueSummary(await loadMobileSyncQueueSummary());
+      setLastAutoSyncAt(new Date().toISOString());
+      setSyncQueueMessage(result.attempted === 0 ? "" : `自动同步完成：成功 ${result.synced} 条，失败 ${result.failed + result.conflicted} 条`);
+    } catch (error) {
+      setSyncQueueSummary(await loadMobileSyncQueueSummary());
+      setSyncQueueMessage(error instanceof Error ? error.message : "自动同步失败");
+    } finally {
+      setIsSyncingQueue(false);
+      autoSyncRunningRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!client) {
+      return;
+    }
+
+    void runAutomaticSync();
+
+    const subscription = AppState.addEventListener("change", (nextState: AppStateStatus) => {
+      if (nextState === "active") {
+        void runAutomaticSync();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [client, lastAutoSyncAt]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
