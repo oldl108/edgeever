@@ -3,6 +3,7 @@
   "name": "EdgeEver 网页剪藏",
   "version": "0.1.0",
   "description": "把当前网页链接或选中内容保存到自托管的 EdgeEver 笔记",
+  "homepage_url": "https://github.com/oldl108/edgeever/tree/main/apps/browser-extension",
   "action": {
     "default_popup": "popup.html",
     "default_title": "保存到 EdgeEver"
