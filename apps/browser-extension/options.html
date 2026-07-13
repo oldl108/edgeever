@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>EdgeEver 剪藏设置</title>
+<style>
+  body { max-width: 520px; margin: 40px auto; padding: 0 20px; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; color: #1f2937; }
+  h1 { font-size: 18px; }
+  label { display: block; margin: 14px 0 4px; font-weight: 600; }
+  .hint { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  input, select { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+  button { margin-top: 18px; padding: 8px 22px; border: 0; border-radius: 6px; background: #16a34a; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  #status { margin-top: 12px; min-height: 20px; }
+  #status.ok { color: #16a34a; }
+  #status.err { color: #dc2626; }
+</style>
+</head>
+<body>
+  <h1>EdgeEver 剪藏设置</h1>
+
+  <label for="baseUrl">服务器地址</label>
+  <input id="baseUrl" placeholder="https://notes.example.com" />
+
+  <label for="token">API Token</label>
+  <input id="token" type="password" placeholder="在 EdgeEver 左下角个人中心 → MCP 设置里创建" />
+  <div class="hint">需要的权限：read:notebooks、write:memos（可选 read:tags）</div>
+
+  <label for="notebook">默认笔记本（右键快速剪藏存到这里）</label>
+  <select id="notebook"><option value="">— 先保存连接后加载 —</option></select>
+
+  <label for="tags">默认标签</label>
+  <input id="tags" placeholder="剪藏" />
+
+  <button id="save">测试连接并保存</button>
+  <div id="status"></div>
+
+  <script src="api.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

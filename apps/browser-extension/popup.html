@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<style>
+  body { width: 340px; margin: 0; padding: 14px; font: 13px/1.5 system-ui, "Microsoft YaHei", sans-serif; color: #1f2937; }
+  h1 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+  h1 .dot { width: 10px; height: 10px; border-radius: 3px; background: #16a34a; display: inline-block; }
+  label { display: block; margin: 8px 0 3px; color: #6b7280; font-size: 12px; }
+  input, select, textarea { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+  textarea { height: 84px; resize: vertical; }
+  button { width: 100%; margin-top: 12px; padding: 8px; border: 0; border-radius: 6px; background: #16a34a; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { background: #9ca3af; cursor: default; }
+  #status { margin-top: 8px; font-size: 12px; min-height: 16px; }
+  #status.ok { color: #16a34a; }
+  #status.err { color: #dc2626; }
+  #setup { display: none; }
+  #setup a { color: #2563eb; }
+</style>
+</head>
+<body>
+  <h1><span class="dot"></span>保存到 EdgeEver</h1>
+
+  <div id="setup">
+    还没有配置服务器和 API Token，<a href="#" id="open-options">去设置</a>。
+  </div>
+
+  <div id="form">
+    <label for="title">标题</label>
+    <input id="title" maxlength="160" />
+
+    <label for="notebook">笔记本</label>
+    <select id="notebook"></select>
+
+    <label for="tags">标签（逗号或空格分隔）</label>
+    <input id="tags" />
+
+    <label for="content">内容（已抓取选中文字，可编辑补充）</label>
+    <textarea id="content"></textarea>
+
+    <button id="save">保存笔记</button>
+    <div id="status"></div>
+  </div>
+
+  <script src="api.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

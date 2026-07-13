@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "EdgeEver 网页剪藏",
+  "version": "0.1.0",
+  "description": "把当前网页链接或选中内容保存到自托管的 EdgeEver 笔记",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "保存到 EdgeEver"
+  },
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
