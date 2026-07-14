@@ -12,10 +12,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { api } from "@/lib/api";
+import { api, ApiRequestError } from "@/lib/api";
 import {
   createEdgeEverZip,
   downloadEdgeEverZip,
+  EdgeEverZipImportError,
   parseEdgeEverZip,
   restoreEdgeEverZip,
   type EdgeEverZipProgress,
@@ -42,13 +43,38 @@ export const DataExportCard = () => {
   const [operation, setOperation] = useState<OperationKind>("export");
   const [progress, setProgress] = useState<EdgeEverZipProgress>({ completed: 0, total: 0 });
   const [pendingImport, setPendingImport] = useState<ParsedEdgeEverZip | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const busy = state === "working";
+
+  const describeImportError = (error: unknown) => {
+    if (error instanceof EdgeEverZipImportError) {
+      switch (error.code) {
+        case "invalidZip": return t("dataExport.importErrors.invalidZip");
+        case "missingManifest": return t("dataExport.importErrors.missingManifest");
+        case "unsupportedFormat": return t("dataExport.importErrors.unsupportedFormat");
+        case "unsupportedVersion": return t("dataExport.importErrors.unsupportedVersion");
+        case "invalidManifest": return t("dataExport.importErrors.invalidManifest");
+        case "missingData": return t("dataExport.importErrors.missingData");
+        case "invalidData": return t("dataExport.importErrors.invalidData");
+        case "incompleteData": return t("dataExport.importErrors.incompleteData");
+        case "incompleteResources": return t("dataExport.importErrors.incompleteResources");
+      }
+    }
+    if (error instanceof ApiRequestError) {
+      return t("dataExport.importErrors.serverRejected", { message: error.message });
+    }
+    if (error instanceof TypeError) {
+      return t("dataExport.importErrors.network");
+    }
+    return t("dataExport.importErrors.unknown");
+  };
 
   const handleExport = async () => {
     setOperation("export");
     setState("working");
     setProgress({ completed: 0, total: 0 });
+    setErrorMessage(null);
     try {
       const blob = await createEdgeEverZip(
         { listNotebooks: api.listNotebooks, getPage: api.getJsonBackupPage, getResourceBlob: api.getResourceBlob },
@@ -59,6 +85,7 @@ export const DataExportCard = () => {
       setState("complete");
     } catch (error) {
       console.error("Failed to export EdgeEver ZIP", error);
+      setErrorMessage(t("dataExport.error"));
       setState("error");
     }
   };
@@ -68,12 +95,14 @@ export const DataExportCard = () => {
     setOperation("import");
     setState("working");
     setProgress({ completed: 0, total: 0 });
+    setErrorMessage(null);
     try {
       const parsed = await parseEdgeEverZip(file);
       setPendingImport(parsed);
       setState("idle");
     } catch (error) {
       console.error("Invalid EdgeEver ZIP", error);
+      setErrorMessage(describeImportError(error));
       setState("error");
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -87,6 +116,7 @@ export const DataExportCard = () => {
     setOperation("import");
     setState("working");
     setProgress({ completed: 0, total: 0 });
+    setErrorMessage(null);
     try {
       await restoreEdgeEverZip(
         archive,
@@ -101,6 +131,7 @@ export const DataExportCard = () => {
       setState("complete");
     } catch (error) {
       console.error("Failed to import EdgeEver ZIP", error);
+      setErrorMessage(describeImportError(error));
       setState("error");
     }
   };
@@ -142,7 +173,7 @@ export const DataExportCard = () => {
             </div>
           ) : null}
           {state === "complete" ? <p className="flex items-center gap-1.5 text-xs text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />{operation === "import" ? t("dataExport.importComplete") : t("dataExport.complete")}</p> : null}
-          {state === "error" ? <p className="flex items-center gap-1.5 text-xs text-red-600" role="alert"><AlertCircle className="h-3.5 w-3.5" />{operation === "import" ? t("dataExport.importError") : t("dataExport.error")}</p> : null}
+          {state === "error" ? <p className="flex items-center gap-1.5 text-xs text-red-600" role="alert"><AlertCircle className="h-3.5 w-3.5 shrink-0" />{errorMessage}</p> : null}
         </CardContent>
       </Card>
 

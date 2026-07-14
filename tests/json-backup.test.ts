@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { JsonBackupMemo, JsonBackupNotebook, MemoDetail, Notebook, Resource } from "@edgeever/shared";
-import { strFromU8 } from "fflate";
-import { createEdgeEverZip, parseEdgeEverZip, restoreEdgeEverZip } from "../apps/web/src/lib/json-backup";
+import { strFromU8, strToU8, zipSync } from "fflate";
+import {
+  createEdgeEverZip,
+  parseEdgeEverZip,
+  restoreEdgeEverZip,
+} from "../apps/web/src/lib/json-backup";
 
 const notebook = (id: string, name: string, parentId: string | null = null): Notebook => ({
   id,
@@ -56,6 +60,34 @@ const resource: Resource = {
 };
 
 describe("EdgeEver ZIP", () => {
+  test("reports actionable archive validation errors", async () => {
+    await expect(parseEdgeEverZip(new Blob(["not a zip"]))).rejects.toEqual(
+      expect.objectContaining({ code: "invalidZip" })
+    );
+
+    await expect(parseEdgeEverZip(new Blob([zipSync({ "notebooks.json": strToU8("[]") })]))).rejects.toEqual(
+      expect.objectContaining({ code: "missingManifest" })
+    );
+
+    const manifest = {
+      format: "another-app",
+      formatVersion: 1,
+      schemaVersion: 1,
+      edgeeverVersion: "0.1.13",
+      buildId: "test-build",
+      exportedAt: "2026-07-14T00:00:00.000Z",
+      includesTrash: false,
+      counts: { notebooks: 0, memos: 0, revisions: 0, resources: 0 },
+    };
+    await expect(parseEdgeEverZip(new Blob([zipSync({
+      "manifest.json": strToU8(JSON.stringify(manifest)),
+    })]))).rejects.toEqual(expect.objectContaining({ code: "unsupportedFormat" }));
+
+    await expect(parseEdgeEverZip(new Blob([zipSync({
+      "manifest.json": strToU8(JSON.stringify({ ...manifest, format: "edgeever-zip", formatVersion: 99 })),
+    })]))).rejects.toEqual(expect.objectContaining({ code: "unsupportedVersion" }));
+  });
+
   test("combines readable Markdown with versioned recovery data", async () => {
     const blob = await createEdgeEverZip(
       {

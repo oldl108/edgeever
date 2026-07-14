@@ -28,6 +28,27 @@ export type EdgeEverZipProgress = {
   total: number;
 };
 
+export type EdgeEverZipImportErrorCode =
+  | "invalidZip"
+  | "missingManifest"
+  | "unsupportedFormat"
+  | "unsupportedVersion"
+  | "invalidManifest"
+  | "missingData"
+  | "invalidData"
+  | "incompleteData"
+  | "incompleteResources";
+
+export class EdgeEverZipImportError extends Error {
+  code: EdgeEverZipImportErrorCode;
+
+  constructor(code: EdgeEverZipImportErrorCode, cause?: unknown) {
+    super(code, { cause });
+    this.name = "EdgeEverZipImportError";
+    this.code = code;
+  }
+}
+
 type JsonBackupPage = {
   memos: MemoDetail[];
   resources: Resource[];
@@ -212,18 +233,26 @@ export const createEdgeEverZip = async (
   });
 };
 
-const parseJsonFile = (files: Record<string, Uint8Array>, path: string) => {
+const parseJsonFile = (
+  files: Record<string, Uint8Array>,
+  path: string,
+  missingCode: EdgeEverZipImportErrorCode = "missingData"
+) => {
   const data = files[path];
   if (!data) {
-    throw new Error(`Backup file is missing: ${path}`);
+    throw new EdgeEverZipImportError(missingCode);
   }
-  return JSON.parse(strFromU8(data)) as unknown;
+  try {
+    return JSON.parse(strFromU8(data)) as unknown;
+  } catch (error) {
+    throw new EdgeEverZipImportError(path === "manifest.json" ? "invalidManifest" : "invalidData", error);
+  }
 };
 
 const unzipBlob = async (blob: Blob) => {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   return new Promise<Record<string, Uint8Array>>((resolve, reject) => {
-    unzip(bytes, (error, files) => error ? reject(error) : resolve(files));
+    unzip(bytes, (error, files) => error ? reject(new EdgeEverZipImportError("invalidZip", error)) : resolve(files));
   });
 };
 
@@ -241,14 +270,40 @@ const sortNotebooksForRestore = (notebooks: JsonBackupNotebook[]) => {
 
 export const parseEdgeEverZip = async (blob: Blob): Promise<ParsedEdgeEverZip> => {
   const files = await unzipBlob(blob);
-  const manifest = JsonBackupManifestSchema.parse(parseJsonFile(files, "manifest.json"));
+  const manifestValue = parseJsonFile(files, "manifest.json", "missingManifest");
+  if (!manifestValue || typeof manifestValue !== "object") {
+    throw new EdgeEverZipImportError("invalidManifest");
+  }
+  const manifestRecord = manifestValue as Record<string, unknown>;
+  if (manifestRecord.format !== EDGEEVER_ZIP_FORMAT) {
+    throw new EdgeEverZipImportError("unsupportedFormat");
+  }
+  if (manifestRecord.formatVersion !== EDGEEVER_ZIP_FORMAT_VERSION) {
+    throw new EdgeEverZipImportError("unsupportedVersion");
+  }
+  const manifestResult = JsonBackupManifestSchema.safeParse(manifestValue);
+  if (!manifestResult.success) {
+    throw new EdgeEverZipImportError("invalidManifest", manifestResult.error);
+  }
+  const manifest = manifestResult.data;
   const notebooksValue = parseJsonFile(files, "notebooks.json");
   if (!Array.isArray(notebooksValue)) {
-    throw new Error("notebooks.json must contain an array.");
+    throw new EdgeEverZipImportError("invalidData");
   }
-  const notebooks = sortNotebooksForRestore(notebooksValue.map((item) => JsonBackupNotebookSchema.parse(item)));
+  const notebooksResult = JsonBackupNotebookSchema.array().safeParse(notebooksValue);
+  if (!notebooksResult.success) {
+    throw new EdgeEverZipImportError("invalidData", notebooksResult.error);
+  }
+  const notebooks = sortNotebooksForRestore(notebooksResult.data);
   const memoPaths = Object.keys(files).filter((path) => /^memos\/[^/]+\.json$/.test(path)).sort();
-  const memos = memoPaths.map((path) => JsonBackupMemoSchema.parse(parseJsonFile(files, path)) as JsonBackupMemo);
+  const memos: JsonBackupMemo[] = [];
+  for (const path of memoPaths) {
+    const memoResult = JsonBackupMemoSchema.safeParse(parseJsonFile(files, path));
+    if (!memoResult.success) {
+      throw new EdgeEverZipImportError("invalidData", memoResult.error);
+    }
+    memos.push(memoResult.data as JsonBackupMemo);
+  }
   const markdownCount = Object.keys(files).filter((path) => /^notes\/.+\.md$/.test(path)).length;
 
   if (
@@ -256,19 +311,19 @@ export const parseEdgeEverZip = async (blob: Blob): Promise<ParsedEdgeEverZip> =
     || manifest.counts.memos !== memos.length
     || manifest.counts.memos !== markdownCount
   ) {
-    throw new Error("Backup manifest counts do not match the archive contents.");
+    throw new EdgeEverZipImportError("incompleteData");
   }
 
   const resources = memos.flatMap((memo) => memo.resources);
   const revisionCount = memos.reduce((count, memo) => count + memo.revisions.length, 0);
   if (manifest.counts.revisions !== revisionCount) {
-    throw new Error("Backup revisions are incomplete.");
+    throw new EdgeEverZipImportError("incompleteData");
   }
   if (
     manifest.counts.resources !== resources.length
     || resources.some((resource) => !files[resource.archivePath] || files[resource.archivePath].byteLength !== resource.byteSize)
   ) {
-    throw new Error("Backup resources are incomplete.");
+    throw new EdgeEverZipImportError("incompleteResources");
   }
 
   return { manifest, notebooks, memos, files };
